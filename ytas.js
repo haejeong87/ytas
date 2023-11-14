@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Auto Skip
 // @namespace    https://github.com/haejeong87/ytas/
-// @version      0.1.2
+// @version      0.2.0
 // @description  YouTube Auto Skip Ads
 // @author       Hae Jeong
 // @updateURL    https://raw.githubusercontent.com/haejeong87/ytas/main/ytas.js
@@ -11,17 +11,109 @@
 // ==/UserScript==
 
 (function() {
-  'use strict';
-  const style = document.createElement('style');
-  style.innerHTML = `
-    #logo-icon svg { box-shadow: 0 1px red; }
-    .ytp-ad-module { display: none; }
-    yt-mealbar-promo-renderer { display: none; }
-  `;
-  document.body.appendChild(style);
-  function autoskip() {
-      const e = document.querySelector('.ytp-ad-skip-button');
-      e && e.click();
+  const CURRENT_TIME_KEY = 'YTAS_currentTime';
+  const VIDEO_ID_KEY = 'YTAS_videoId';
+  const SHOULD_UNMUTE_KEY = 'YTAS_shouldUnmute';
+  const RELOAD_DELAY = 7000;
+  let intervalId = null;
+  log('init');
+  main();
+  function main() {
+      addStyle();
+      intervalId = setInterval(autoSkip, 100);
+      log('interval scheduled');
   }
-  setInterval(autoskip, 1000);
+  function log(msg) {
+      console.log(`[YTAS] ${msg}`);
+  }
+  function addStyle() {
+      const style = document.createElement('style');
+      style.innerHTML = `
+          #logo-icon svg { box-shadow: 0 1px red; }
+          #player-ads,
+          .ytp-ad-module,
+          yt-mealbar-promo-renderer,
+          ytd-ad-slot-renderer { display: none; !important }
+          .ad-showing::after {
+              content: 'Ad is hidden';
+              background: black;
+              color: white;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              position: absolute;
+              left: 0;
+              right: 0;
+              top: 0;
+              bottom: 0;
+              z-index: 999;
+          }
+      `;
+      document.body.appendChild(style);
+  }
+  const YT = {
+      player: document.querySelector('#movie_player'),
+      press(label) {
+           this.player.querySelector(`button[title^="${label}"]`).click();
+      },
+      isAdPlaying() {
+          return this.player.classList.contains('ad-showing');
+      },
+      isCurrentTimeForCurrentVideo() {
+          return this.getVideoId() === localStorage.getItem(VIDEO_ID_KEY);
+      },
+      findAndClickSkipButton() {
+          this.player.querySelector('.ytp-ad-skip-button').click();
+      },
+      getCurrentTime() {
+          return Math.floor(this.player.querySelector('video').currentTime);
+      },
+      getVideoId() {
+          return new URL(location.href).searchParams.get('v');
+      },
+      updateCurrentTime() {
+          localStorage.setItem(CURRENT_TIME_KEY, this.getCurrentTime());
+          localStorage.setItem(VIDEO_ID_KEY, this.getVideoId());
+      },
+      getUrlAtCurrentTime() {
+          const url = new URL(location.href);
+          if (this.isCurrentTimeForCurrentVideo()) {
+              url.searchParams.set('t', localStorage.getItem(CURRENT_TIME_KEY));
+          }
+          return url.toString();
+      },
+      reload() {
+          const url = this.getUrlAtCurrentTime();
+          log(`Reloading: ${url}`);
+          history.replaceState(null, null, url);
+          location.reload();
+      },
+  };
+  function autoSkip() {
+      if (YT.isAdPlaying()) {
+          try {
+              YT.findAndClickSkipButton();
+              log('Found Skip button');
+          } catch (_) {
+              try {
+                  YT.press('Mute');
+                  localStorage.setItem(SHOULD_UNMUTE_KEY, '1');
+              } catch (e) {
+                  log(`Could not find Mute button: ${e}`);
+              }
+              setTimeout(() => YT.reload(), RELOAD_DELAY);
+              clearInterval(intervalId);
+          }
+      } else {
+          if (localStorage.getItem(SHOULD_UNMUTE_KEY) === '1') {
+              try {
+                  YT.press('Unmute');
+                  localStorage.setItem(SHOULD_UNMUTE_KEY, '0');
+              } catch (e) {
+                  log(`Couldn not find Unmute button: ${e}`);
+              }
+          }
+          YT.updateCurrentTime();
+      }
+  }
 })();
