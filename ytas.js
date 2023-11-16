@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Auto Skip
 // @namespace    https://github.com/haejeong87/ytas/
-// @version      0.2.1
+// @version      0.2.2
 // @description  YouTube Auto Skip Ads
 // @author       Hae Jeong
 // @updateURL    https://raw.githubusercontent.com/haejeong87/ytas/main/ytas.js
