@@ -74,7 +74,14 @@
         getVideoId() {
             return new URL(location.href).searchParams.get('v');
         },
+        updateCurrentTimeCount: 0,
+        updateCurrentTimeMax: 10,
         updateCurrentTime() {
+            if (this.updateTimeCount < this.updateCurrentTimeMax) {
+                this.updateTimeCount++;
+                return;
+            }
+            this.updateTimeCount = 0;
             localStorage.setItem(CURRENT_TIME_KEY, this.getCurrentTime());
             localStorage.setItem(VIDEO_ID_KEY, this.getVideoId());
         },
