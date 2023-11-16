@@ -14,7 +14,7 @@
     const CURRENT_TIME_KEY = 'YTAS_currentTime';
     const VIDEO_ID_KEY = 'YTAS_videoId';
     const SHOULD_UNMUTE_KEY = 'YTAS_shouldUnmute';
-    const RELOAD_DELAY = 7000;
+    const RELOAD_DELAY = 8000;
     let intervalId = null;
     log('Init');
     main();
