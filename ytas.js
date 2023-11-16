@@ -52,12 +52,11 @@
         document.body.appendChild(style);
     }
     const YT = {
-        player: document.querySelector('#movie_player'),
         press(label) {
-             this.player.querySelector(`button[title^="${label}"]`).click();
+             document.querySelector(`#movie_player button[title^="${label}"]`).click();
         },
         isAdPlaying() {
-            return this.player.classList.contains('ad-showing');
+            return document.querySelector('#movie_player.ad-showing') != null;
         },
         isCurrentTimeForCurrentVideo() {
             return this.getVideoId() === localStorage.getItem(VIDEO_ID_KEY);
@@ -67,10 +66,10 @@
             return (dialog != null) && dialog.style.display !== 'none';
         },
         findAndClickSkipButton() {
-            this.player.querySelector('.ytp-ad-skip-button').click();
+            document.querySelector('#movie_player .ytp-ad-skip-button').click();
         },
         getCurrentTime() {
-            return Math.floor(this.player.querySelector('video').currentTime);
+            return Math.floor(document.querySelector('#movie_player video').currentTime);
         },
         getVideoId() {
             return new URL(location.href).searchParams.get('v');
