@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Auto Skip
 // @namespace    https://github.com/haejeong87/ytas/
-// @version      0.2.2
+// @version      0.2.3
 // @description  YouTube Auto Skip Ads
 // @author       Hae Jeong
 // @updateURL    https://raw.githubusercontent.com/haejeong87/ytas/main/ytas.js
@@ -11,16 +11,90 @@
 // ==/UserScript==
 
 (function() {
-    const CURRENT_TIME_KEY = 'YTAS_currentTime';
-    const VIDEO_ID_KEY = 'YTAS_videoId';
-    const SHOULD_UNMUTE_KEY = 'YTAS_shouldUnmute';
-    const RELOAD_DELAY = 8000;
-    let intervalId = null;
     log('Init');
+    const CURRENT_TIME_KEY = 'YTAS_currentTime';
+    const DISABLE_RELOAD = false;
+    const SHOULD_UNMUTE_KEY = 'YTAS_shouldUnmute';
+    const RELOAD_DELAY = 10000;
+    let intervalId = null;
+    class VideoStorage {
+        constructor(videoId) {
+            this.videoId = videoId;
+        }
+        getKey(name) {
+            return `YTAS_${this.videoId}_${name}`;
+        }
+        getTime() {
+            return localStorage.getItem(this.getKey('time'));
+        }
+        setTime(time) {
+            return localStorage.setItem(this.getKey('time'), time);
+        }
+        getShouldUnmute() {
+            return localStorage.getItem(this.getKey('shouldUnmute')) !== '0';
+        }
+        setShouldUnmute(shouldUnmute) {
+            return localStorage.setItem(this.getKey('shouldUnmute'), shouldUnmute ? '1' : '0');
+        }
+    }
+    const YT = {
+        press(label) {
+             document.querySelector(`#movie_player button[title^="${label}"]`).click();
+        },
+        isAdPlaying() {
+            return document.querySelector('#movie_player.ad-showing') != null;
+        },
+        isDialogOpen() {
+            const dialog = document.querySelector('tp-yt-paper-dialog');
+            if (dialog == null) {
+                return false;
+            }
+            return dialog.style.display !== 'none' || dialog.style.maxHeight !== '0px';
+        },
+        isHomePath() {
+            return location.pathname === '/';
+        },
+        findAndClickSkipButton() {
+            document.querySelector('#movie_player [class*=ytp-ad-skip-button]').click();
+        },
+        getCurrentTime() {
+            return Math.floor(document.querySelector('#movie_player video').currentTime);
+        },
+        getKey(videoId) {
+            return `${CURRENT_TIME_KEY}_${videoId}`;
+        },
+        getVideoId() {
+            return new URL(location.href).searchParams.get('v');
+        },
+        updateCurrentTime() {
+            storage.setTime(this.getCurrentTime());
+        },
+        getUrlAtCurrentTime() {
+            const url = new URL(location.href);
+            if (this.isCurrentTimeForCurrentVideo()) {
+                url.searchParams.set('t', storage.getTime());
+            }
+            return url.toString();
+        },
+        confirmDialog() {
+            document.querySelector('tp-yt-paper-dialog button[aria-label="Yes"]').click();
+        },
+        reload() {
+            if (DISABLE_RELOAD) {
+                return;
+            }
+            const url = this.getUrlAtCurrentTime();
+            log(`Reloading: ${url}`);
+            history.replaceState(null, null, url);
+            location.reload();
+        },
+    };
+    const storage = new VideoStorage(YT.getVideoId());
     main();
     function main() {
         addStyle();
-        intervalId = setInterval(autoSkip, 100);
+        setInterval(autoHomeToSub, 1000);
+        intervalId = setInterval(autoSkip, 1000);
         log('Interval scheduled');
     }
     function log(msg) {
@@ -37,71 +111,18 @@
             .ad-showing::after {
                 content: 'Ad is hidden';
                 background: black;
+                opacity: 0.9;
                 color: white;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 position: absolute;
-                left: 0;
-                right: 0;
-                top: 0;
-                bottom: 0;
+                inset: 10px;
                 z-index: 999;
             }
         `;
         document.body.appendChild(style);
     }
-    const YT = {
-        press(label) {
-             document.querySelector(`#movie_player button[title^="${label}"]`).click();
-        },
-        isAdPlaying() {
-            return document.querySelector('#movie_player.ad-showing') != null;
-        },
-        isCurrentTimeForCurrentVideo() {
-            return this.getVideoId() === localStorage.getItem(VIDEO_ID_KEY);
-        },
-        isDialogOpen() {
-            const dialog = document.querySelector('tp-yt-paper-dialog');
-            return (dialog != null) && dialog.style.display !== 'none';
-        },
-        findAndClickSkipButton() {
-            document.querySelector('#movie_player .ytp-ad-skip-button').click();
-        },
-        getCurrentTime() {
-            return Math.floor(document.querySelector('#movie_player video').currentTime);
-        },
-        getVideoId() {
-            return new URL(location.href).searchParams.get('v');
-        },
-        updateCurrentTimeCount: 0,
-        updateCurrentTimeMax: 10,
-        updateCurrentTime() {
-            if (this.updateTimeCount < this.updateCurrentTimeMax) {
-                this.updateTimeCount++;
-                return;
-            }
-            this.updateTimeCount = 0;
-            localStorage.setItem(CURRENT_TIME_KEY, this.getCurrentTime());
-            localStorage.setItem(VIDEO_ID_KEY, this.getVideoId());
-        },
-        getUrlAtCurrentTime() {
-            const url = new URL(location.href);
-            if (this.isCurrentTimeForCurrentVideo()) {
-                url.searchParams.set('t', localStorage.getItem(CURRENT_TIME_KEY));
-            }
-            return url.toString();
-        },
-        confirmDialog() {
-            document.querySelector('tp-yt-paper-dialog button[aria-label="Yes"]').click();
-        },
-        reload() {
-            const url = this.getUrlAtCurrentTime();
-            log(`Reloading: ${url}`);
-            history.replaceState(null, null, url);
-            location.reload();
-        },
-    };
     function autoSkip() {
         if (YT.isAdPlaying()) {
             try {
@@ -110,8 +131,8 @@
             } catch (_) {
                 try {
                     YT.press('Mute');
-                    localStorage.setItem(SHOULD_UNMUTE_KEY, '1');
-                    log('Muted')
+                    log('Muted');
+                    storage.setShouldUnmute(true);
                 } catch (e) {
                     log(`Could not find Mute button: ${e}`);
                 }
@@ -119,6 +140,7 @@
                 clearInterval(intervalId);
             }
         } else {
+            YT.updateCurrentTime();
             if (YT.isDialogOpen()) {
                 log('Detected dialog');
                 try {
@@ -128,16 +150,22 @@
                     log(`Could not find Yes button: ${e}`);
                 }
             }
-            if (localStorage.getItem(SHOULD_UNMUTE_KEY) === '1') {
+            if (storage.getShouldUnmute()) {
                 try {
                     YT.press('Unmute');
-                    localStorage.setItem(SHOULD_UNMUTE_KEY, '0');
                     log('Unmuted');
                 } catch (e) {
-                    log(`Couldn not find Unmute button: ${e}`);
+                    log(`Could not find Unmute button: ${e}`);
+                } finally {
+                    storage.setShouldUnmute(false);
                 }
             }
-            YT.updateCurrentTime();
+        }
+    }
+    function autoHomeToSub() {
+        if (YT.isHomePath()) {
+            log('Detected home path');
+            location.assign('/feed/subscriptions');
         }
     }
 })();
